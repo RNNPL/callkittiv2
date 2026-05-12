@@ -21,10 +21,8 @@ export default function LobbyScreen() {
 
   const handleStartGame = () => {
     setIsStarting(true);
-    setTimeout(() => {
-      setIsStarting(false);
-      alert("Game Starting!");
-    }, 2000);
+   router.push(`../gamescreen/gamescreen` as any)
+
   };
 
   return (
