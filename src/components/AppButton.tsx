@@ -1,11 +1,11 @@
 import React from "react";
 import {
-    StyleSheet,
-    Text,
-    TextStyle,
-    TouchableOpacity,
-    View,
-    ViewStyle,
+  StyleSheet,
+  Text,
+  TextStyle,
+  TouchableOpacity,
+  View,
+  ViewStyle,
 } from "react-native";
 import { colors, radius } from "../../app/theme/tokens";
 
@@ -16,6 +16,7 @@ type PrimaryButtonProps = {
   onPress: () => void;
   variant?: ButtonVariant;
   style?: ViewStyle;
+  disabled?: boolean;
 };
 
 export function AppButton({

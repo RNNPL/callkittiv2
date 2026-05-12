@@ -2,14 +2,15 @@ import { router } from "expo-router";
 import React from "react";
 import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { AppButton, SectionLabel } from "../src/components/AppButton";
-import { useRoom } from "./hooks/Useroom";
+import { useRoom } from "./hooks/useroom";
 import { colors, radius } from "./theme/tokens";
+import * as Network from "expo-network";
 
 export default function JoinRoomScreen() {
   // Ensure useRoom provides a default empty string to avoid .trim() errors
   const { roomCode, setRoomCode } = useRoom();
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     const code = roomCode.trim().toUpperCase();
 
     if (!code || code.length < 4) {
@@ -17,6 +18,8 @@ export default function JoinRoomScreen() {
         "Invalid Room Code",
         "Please enter a valid room code (at least 4 characters).",
       );
+      var ip = await Network.getIpAddressAsync();
+      console.log("Device IP Address:", ip);
       return;
     }
 

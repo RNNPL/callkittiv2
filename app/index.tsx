@@ -1,12 +1,12 @@
 import { router } from "expo-router";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StatusBar, StyleSheet, Text, View } from "react-native";
 import { AppButton } from "../src/components/AppButton";
 import { colors } from "./theme/tokens";
-
 export default function HomeScreen() {
   return (
     <View style={styles.container}>
+      <StatusBar hidden />
       <Text style={styles.title}>CALL KITTI</Text>
       <Text style={styles.subtitle}>Enjoy your favorite card game.</Text>
 
@@ -14,7 +14,7 @@ export default function HomeScreen() {
 
       <AppButton
         label="Create Room"
-        onPress={() => router.push("" as any)}
+        onPress={() => router.push("/create" as any)}
         style={styles.btn}
       />
 
@@ -24,7 +24,7 @@ export default function HomeScreen() {
         variant="secondary"
         style={styles.btn}
       />
-      <Text style={styles.footer}>No account needed · Free forever</Text>
+      <Text style={styles.footer}>Aaryan|Loojah|Nikhil</Text>
     </View>
   );
 }
