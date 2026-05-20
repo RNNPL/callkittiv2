@@ -1,8 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet, FlatList } from "react-native";
-import { colors, radius } from "../../app/theme/tokens";
+import { FlatList, StyleSheet, Text, View } from "react-native";
+import { colors, radius } from "../theme/tokens";
 
-interface Player {
+export interface Player {
   id: string;
   name: string;
   isMe?: boolean;
@@ -14,24 +14,28 @@ interface UsersProps {
 }
 
 export default function Users({ players }: UsersProps) {
-  const renderItem = ({ item }: { item: Player }) => (
-    <View style={styles.playerRow}>
-      <View
-        style={[
-          styles.dot,
-          { backgroundColor: item.isMe ? colors.accent : colors.muted },
-        ]}
-      />
-      <Text style={[styles.playerName, item.isMe && styles.myPlayerName]}>
-        {item.name}
-      </Text>
-      {item.isHost && (
-        <View style={styles.hostBadge}>
-          <Text style={styles.hostText}>HOST</Text>
-        </View>
-      )}
-    </View>
-  );
+  const renderItem = ({ item, index }: { item: Player; index: number }) => {
+    const displayName = `Player ${index + 1}${item.isMe ? " (You)" : ""}`;
+
+    return (
+      <View style={styles.playerRow}>
+        <View
+          style={[
+            styles.dot,
+            { backgroundColor: item.isMe ? colors.accent : colors.muted },
+          ]}
+        />
+        <Text style={[styles.playerName, item.isMe && styles.myPlayerName]}>
+          {displayName}
+        </Text>
+        {item.isHost && (
+          <View style={styles.hostBadge}>
+            <Text style={styles.hostText}>HOST</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <FlatList
@@ -39,7 +43,6 @@ export default function Users({ players }: UsersProps) {
       renderItem={renderItem}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
-      // Troubleshooting: If this shows, the data isn't reaching the component
       ListEmptyComponent={
         <Text style={styles.emptyText}>No players found in list...</Text>
       }

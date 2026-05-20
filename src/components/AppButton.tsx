@@ -1,13 +1,13 @@
 import React from "react";
 import {
-  StyleSheet,
-  Text,
-  TextStyle,
-  TouchableOpacity,
-  View,
-  ViewStyle,
+    StyleSheet,
+    Text,
+    TextStyle,
+    TouchableOpacity,
+    View,
+    ViewStyle,
 } from "react-native";
-import { colors, radius } from "../../app/theme/tokens";
+import { colors, radius } from "../theme/tokens";
 
 type ButtonVariant = "primary" | "secondary" | "ghost";
 
