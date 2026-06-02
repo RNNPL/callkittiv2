@@ -1,17 +1,18 @@
-import React, { useCallback } from "react";
-import {
-  View,
-  StyleSheet,
-  Dimensions,
-  TouchableOpacity,
-  Text,
-} from "react-native";
-import PlayerIcon from "./playericons";
-import Cards from "./cards";
-
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as NavigationBar from "expo-navigation-bar";
 import { StatusBar } from "expo-status-bar";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import React, { useCallback } from "react";
+import {
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import BiddingButtonPopUp from "../../src/components/BiddingButtonPopUp";
+import { colors } from "../../src/theme/tokens";
+import Cards from "./cards";
+import PlayerIcon from "./playericons";
 
 const { width, height } = Dimensions.get("window");
 
@@ -30,6 +31,8 @@ const GameScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <BiddingButtonPopUp style={styles.biddingButton} />
+
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
@@ -49,7 +52,6 @@ const GameScreen: React.FC = () => {
         <View style={[styles.player, styles.top]}>
           <PlayerIcon name="Player X" />
         </View>
-
         {/* Left Player */}
         <View style={[styles.player, styles.left]}>
           <PlayerIcon name="Player X" />
@@ -61,9 +63,6 @@ const GameScreen: React.FC = () => {
         </View>
 
         {/* Bottom Player */}
-        <View style={[styles.player, styles.bottom]}>
-          <PlayerIcon name="Player X" />
-        </View>
 
         {/* Cards */}
         <View style={styles.cardsContainer}>
@@ -79,17 +78,17 @@ export default GameScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0b6b3a",
+    backgroundColor: "#52eb34",
     justifyContent: "center",
     alignItems: "center",
   },
   table: {
     width: width * 1,
     height: height * 0.8,
-    backgroundColor: "#10b261",
-    borderRadius: 200, 
+    backgroundColor: colors.accentDark,
+    borderRadius: 200,
     borderWidth: 20,
-    borderColor:"#7a4a00",
+    borderColor: "#7a4a00",
     position: "relative",
   },
 
@@ -148,5 +147,12 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     alignSelf: "center",
+  },
+
+  biddingButton: {
+    position: "absolute",
+    bottom: 10,
+    right: 20,
+    zIndex: 999,
   },
 });

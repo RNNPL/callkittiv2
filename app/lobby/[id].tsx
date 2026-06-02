@@ -1,5 +1,5 @@
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -55,22 +55,32 @@ export default function LobbyScreen() {
   const fetchPlayers = async (roomId: string) => {
     const { data, error } = await supabase
       .from("room_players")
-      .select("seat_number,is_host,user_id")
+      .select(
+        `
+        seat_number,
+        is_host,
+        user_id,
+        profiles:user_id ( username )
+      `
+      )
       .eq("room_id", roomId)
       .order("seat_number", { ascending: true });
 
     if (error) {
-      console.log("Fetch players error:", error);
+      console.error("Fetch players error:", error);
       return;
     }
 
     const formatted: Player[] =
-      data?.map((p: any) => ({
-        id: p.user_id,
-        name: p.profiles?.username || `Player ${p.seat_number}`,
-        isHost: p.is_host,
-        isMe: p.user_id === user?.id,
-      })) || [];
+      data?.map((p: any) => {
+        const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
+        return {
+          id: p.user_id,
+          name: profile?.username || `Player ${p.seat_number}`,
+          isHost: p.is_host,
+          isMe: p.user_id === user?.id,
+        };
+      }) || [];
 
     setPlayers(formatted);
   };
@@ -101,7 +111,6 @@ export default function LobbyScreen() {
 
     setRoom(data);
     await fetchPlayers(data.id);
-
     setLoading(false);
   };
 
@@ -110,13 +119,14 @@ export default function LobbyScreen() {
   }, [roomParam]);
 
   // =========================
-  // REALTIME
+  // REALTIME SUBSCRIPTION
   // =========================
   useEffect(() => {
     if (!room?.id) return;
 
     const channel = supabase
       .channel(`room-${room.id}`)
+      // Fires on all devices when any player joins (INSERT) or leaves (DELETE)
       .on(
         "postgres_changes",
         {
@@ -125,8 +135,11 @@ export default function LobbyScreen() {
           table: "room_players",
           filter: `room_id=eq.${room.id}`,
         },
-        () => fetchPlayers(room.id),
+        () => {
+          fetchPlayers(room.id);
+        }
       )
+      // Fires on all devices when room is updated (e.g. game started)
       .on(
         "postgres_changes",
         {
@@ -136,10 +149,29 @@ export default function LobbyScreen() {
           filter: `id=eq.${room.id}`,
         },
         (payload) => {
-          setRoom((prev) =>
-            prev ? { ...prev, ...(payload.new as Partial<Room>) } : prev,
-          );
+          const updatedRoom = payload.new as Room;
+          setRoom((prev) => (prev ? { ...prev, ...updatedRoom } : prev));
+
+          if (
+            updatedRoom.status === "active" ||
+            updatedRoom.status === "started"
+          ) {
+            router.push("/gamescreen/gamescreen");
+          }
+        }
+      )
+      // Fires on all devices when host deletes the room → redirect guests home
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "game_rooms",
+          filter: `id=eq.${room.id}`,
         },
+        () => {
+          router.replace("/");
+        }
       )
       .subscribe();
 
@@ -155,71 +187,71 @@ export default function LobbyScreen() {
     return players.some((p) => p.id === user?.id && p.isHost);
   }, [players, user?.id]);
 
-  const checkIsHost = async (): Promise<boolean> => {
-    if (!room?.id || !user?.id) return false;
-
-    const { data } = await supabase
-      .from("room_players")
-      .select("is_host")
-      .eq("room_id", room.id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    return data?.is_host === true;
-  };
-
   // =========================
   // LEAVE ROOM
   // =========================
-  const leaveRoom = async () => {
+  const handleLeaveRoom = async () => {
     if (!room?.id || !user?.id) return;
 
-    const { error } = await supabase
-      .from("room_players")
-      .delete()
-      .eq("room_id", room.id)
-      .eq("user_id", user.id);
+    try {
+      if (isHost) {
+        // Deleting the room cascades and removes all room_players rows
+        // Realtime DELETE on game_rooms fires → all guests get redirected home
+        const { error } = await supabase
+          .from("game_rooms")
+          .delete()
+          .eq("id", room.id);
 
-    if (error) console.log(error);
-  };
+        if (error) throw error;
 
-  // =========================
-  // DELETE ROOM (HOST)
-  // =========================
-  const deleteRoom = async () => {
-    if (!room?.id) return;
+      } else {
+        // Filter by BOTH user_id AND room_id — without room_id this is a silent no-op
+        const { error: deleteError } = await supabase
+          .from("room_players")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("room_id", room.id);
 
-    await supabase.from("room_players").delete().eq("room_id", room.id);
+        if (deleteError) throw deleteError;
 
-    await supabase.from("game_rooms").delete().eq("id", room.id);
-  };
+        // Decrement player count on the room
+        const { error: updateError } = await supabase
+          .from("game_rooms")
+          .update({
+            current_players: Math.max(0, (room.current_players || 1) - 1),
+          })
+          .eq("id", room.id);
 
-  // =========================
-  // HANDLE LEAVE
-  // =========================
-  const handleLeaveRoom = async () => {
-    const host = await checkIsHost();
+        if (updateError) throw updateError;
+      }
 
-    if (host) {
-      await deleteRoom();
-    } else {
-      await leaveRoom();
+      router.replace("/");
+    } catch (err) {
+      console.error("Error leaving room:", err);
     }
-
-    router.replace("/");
   };
 
   // =========================
   // START GAME
   // =========================
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
+    if (!room?.id) return;
+
     setIsStarting(true);
-    router.push("/gamescreen/gamescreen");
+
+    // Updating status fires a realtime UPDATE to all devices
+    // Every device's listener catches it and routes to gamescreen
+    const { error } = await supabase
+      .from("game_rooms")
+      .update({ status: "active" })
+      .eq("id", room.id);
+
+    if (error) {
+      console.error("Failed to start game:", error);
+      setIsStarting(false);
+    }
   };
 
-  // =========================
-  // LOADING
-  // =========================
   if (authLoading || loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -229,14 +261,10 @@ export default function LobbyScreen() {
     );
   }
 
-  // =========================
-  // NOT FOUND
-  // =========================
   if (notFound) {
     return (
       <View style={[styles.container, styles.center]}>
         <Text style={styles.errorText}>Room not found</Text>
-
         <AppButton label="Back Home" onPress={() => router.replace("/")} />
       </View>
     );
@@ -246,7 +274,7 @@ export default function LobbyScreen() {
     <View style={[styles.container, isLandscape && styles.containerLandscape]}>
       <Stack.Screen options={{ title: `Lobby - ${displayRoomCode}` }} />
 
-      {/* LEFT */}
+      {/* LEFT COLUMN */}
       <View style={[isLandscape ? styles.leftCol : styles.fullWidth]}>
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
@@ -276,7 +304,6 @@ export default function LobbyScreen() {
                   style={styles.btn}
                 />
               )}
-
               <AppButton
                 label="Leave Room"
                 variant="ghost"
@@ -287,7 +314,7 @@ export default function LobbyScreen() {
         </ScrollView>
       </View>
 
-      {/* RIGHT */}
+      {/* RIGHT COLUMN */}
       <View style={styles.listWrapper}>
         <Text style={styles.listTitle}>Players Joined</Text>
         <UserContainer players={players} />
@@ -303,7 +330,6 @@ export default function LobbyScreen() {
               style={styles.btn}
             />
           )}
-
           <AppButton
             label="Leave Room"
             variant="ghost"
@@ -315,51 +341,39 @@ export default function LobbyScreen() {
   );
 }
 
-// =========================
-// STYLES
-// =========================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
     paddingTop: 60,
     paddingHorizontal: 24,
-    marginTop: 50,
   },
-
   center: {
-    flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-
   containerLandscape: {
     flexDirection: "row",
     gap: 24,
     paddingTop: 20,
   },
-
   fullWidth: {
     width: "100%",
   },
-
   leftCol: {
     flex: 0.8,
     justifyContent: "center",
   },
-
   header: {
     alignItems: "center",
     marginBottom: 24,
   },
-
   label: {
     color: colors.muted,
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 2,
   },
-
   codeText: {
     color: colors.white,
     fontSize: 48,
@@ -367,7 +381,6 @@ const styles = StyleSheet.create({
     letterSpacing: 8,
     textTransform: "uppercase",
   },
-
   statusCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -380,24 +393,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
-
   statusText: {
     color: colors.white,
     fontSize: 14,
     fontWeight: "600",
   },
-
   countText: {
     color: colors.accent,
     fontSize: 14,
     fontWeight: "700",
   },
-
   listWrapper: {
     flex: 1,
     marginBottom: 20,
   },
-
   listTitle: {
     color: colors.muted,
     fontSize: 12,
@@ -406,24 +415,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: "uppercase",
   },
-
   footer: {
     paddingBottom: 40,
   },
-
   footerLandscape: {
     marginTop: "auto",
   },
-
   btn: {
     marginBottom: 12,
   },
-
   loadingText: {
     marginTop: 16,
     color: colors.white,
   },
-
   errorText: {
     fontSize: 18,
     color: colors.white,
